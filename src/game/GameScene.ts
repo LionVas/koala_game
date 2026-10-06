@@ -1,7 +1,9 @@
 import Phaser from 'phaser';
 import koalaUrl from '../../Koala.png?url';
 
-const GOAL = 300;
+const INITIAL_GOAL = 300;
+const GOAL_INCREMENT = 300;
+const IP_CHANGE_COST_RATE = 0.1;
 const STARTING_REWARD = 1;
 const UPGRADE_COST = 10;
 const UPGRADE_COST_GROWTH = 1.6;
@@ -16,11 +18,12 @@ export class GameScene extends Phaser.Scene {
   private balance = 0;
   private earned = 0;
   private upgrades = 0;
+  private currentGoal = INITIAL_GOAL;
   private activeEvent: EventType | null = null;
   private nextEvent: EventType = 'overselling';
   private eventEndsAt = 0;
   private lastSecondsShown = -1;
-  private finished = false;
+  private eventTimer: Phaser.Time.TimerEvent | null = null;
 
   private balanceText!: Phaser.GameObjects.Text;
   private rewardText!: Phaser.GameObjects.Text;
@@ -29,6 +32,8 @@ export class GameScene extends Phaser.Scene {
   private upgradeText!: Phaser.GameObjects.Text;
   private buyButton!: Phaser.GameObjects.Rectangle;
   private buyButtonText!: Phaser.GameObjects.Text;
+  private changeIpButton!: Phaser.GameObjects.Rectangle;
+  private changeIpButtonText!: Phaser.GameObjects.Text;
 
   constructor() {
     super('GameScene');
@@ -42,17 +47,26 @@ export class GameScene extends Phaser.Scene {
     this.balance = 0;
     this.earned = 0;
     this.upgrades = 0;
+    this.currentGoal = INITIAL_GOAL;
     this.activeEvent = null;
     this.nextEvent = 'overselling';
-    this.finished = false;
+    this.eventEndsAt = 0;
+    this.eventTimer = null;
     this.lastSecondsShown = -1;
 
     this.add.text(40, 24, 'КОАЛА-КЛИКЕР', {
       fontFamily: 'system-ui, sans-serif', fontSize: '32px', color: '#f8fafc', fontStyle: 'bold',
     });
-    this.add.text(42, 68, `Кликай по коале, покупай мощности и набери ${GOAL} очков.`, {
+    this.add.text(42, 68, 'Кликай по коале, покупай мощности и достигай новых целей.', {
       fontFamily: 'system-ui, sans-serif', fontSize: '18px', color: '#94a3b8',
     });
+
+    const restartButton = this.add.rectangle(828, 43, 184, 40, 0x475569);
+    restartButton.setInteractive({ useHandCursor: true });
+    restartButton.on('pointerdown', () => this.scene.restart());
+    this.add.text(828, 43, 'Начать заново', {
+      fontFamily: 'system-ui, sans-serif', fontSize: '18px', color: '#ffffff',
+    }).setOrigin(0.5);
 
     const valueStyle = {
       fontFamily: 'system-ui, sans-serif', fontSize: '26px', color: '#ffffff', fontStyle: 'bold',
@@ -68,6 +82,11 @@ export class GameScene extends Phaser.Scene {
     this.eventText = this.add.text(58, 218, '', {
       fontFamily: 'system-ui, sans-serif', fontSize: '18px', color: '#cbd5e1',
     });
+    this.changeIpButton = this.add.rectangle(798, 234, 220, 40, 0x2563eb);
+    this.changeIpButton.on('pointerdown', () => this.changeIp());
+    this.changeIpButtonText = this.add.text(798, 234, '', {
+      fontFamily: 'system-ui, sans-serif', fontSize: '16px', color: '#ffffff', fontStyle: 'bold',
+    }).setOrigin(0.5);
 
     const koala = this.add.image(263, 429, 'koala').setDisplaySize(300, 300);
     koala.setInteractive({ useHandCursor: true });
@@ -94,11 +113,11 @@ export class GameScene extends Phaser.Scene {
     }).setOrigin(0.5);
 
     this.refreshDisplay();
-    this.time.delayedCall(FIRST_EVENT_DELAY_MS, () => this.startEvent());
+    this.eventTimer = this.time.delayedCall(FIRST_EVENT_DELAY_MS, () => this.startEvent());
   }
 
   update(): void {
-    if (!this.activeEvent || this.finished) return;
+    if (!this.activeEvent) return;
 
     const seconds = Math.max(0, Math.ceil((this.eventEndsAt - this.time.now) / 1000));
     if (seconds === this.lastSecondsShown) return;
@@ -118,24 +137,25 @@ export class GameScene extends Phaser.Scene {
   }
 
   private rewardPerClick(): number {
+    if (this.activeEvent === 'ipBlock') return 0;
     const normalReward = STARTING_REWARD + this.upgrades;
-    return this.activeEvent === 'overselling' ? Math.max(1, Math.floor(normalReward / 2)) : normalReward;
+    if (this.activeEvent !== 'overselling') return normalReward;
+    return this.upgrades === 0 ? 0 : Math.max(1, Math.floor(normalReward / 2));
   }
 
   private clickKoala(): void {
-    if (this.finished) return;
-    if (this.activeEvent === 'ipBlock') {
-      this.showClickFeedback('IP заблокирован', '#f87171');
+    const reward = this.rewardPerClick();
+    if (reward === 0) {
+      const message = this.activeEvent === 'ipBlock' ? 'IP заблокирован' : 'Оверселлинг: доход 0';
+      this.showClickFeedback(message, '#f87171');
       return;
     }
 
-    const reward = this.rewardPerClick();
     this.balance += reward;
     this.earned += reward;
     this.showClickFeedback(`+${reward}`, '#4ade80');
+    this.advanceGoal();
     this.refreshDisplay();
-
-    if (this.earned >= GOAL) this.finishGame();
   }
 
   private showClickFeedback(message: string, color: string): void {
@@ -150,7 +170,7 @@ export class GameScene extends Phaser.Scene {
 
   private buyUpgrade(): void {
     const cost = this.nextUpgradeCost();
-    if (this.finished || this.balance < cost) return;
+    if (this.balance < cost) return;
 
     this.balance -= cost;
     this.upgrades += 1;
@@ -158,30 +178,45 @@ export class GameScene extends Phaser.Scene {
   }
 
   private startEvent(): void {
-    if (this.finished) return;
-
     this.activeEvent = this.nextEvent;
     this.nextEvent = this.nextEvent === 'overselling' ? 'ipBlock' : 'overselling';
     const duration = this.activeEvent === 'overselling' ? OVERSELLING_DURATION_MS : IP_BLOCK_DURATION_MS;
     this.eventEndsAt = this.time.now + duration;
     this.lastSecondsShown = Math.ceil(duration / 1000);
     this.refreshDisplay();
-    this.time.delayedCall(duration, () => this.endEvent());
+    this.eventTimer = this.time.delayedCall(duration, () => this.endEvent());
   }
 
   private endEvent(): void {
-    if (this.finished) return;
+    if (!this.activeEvent) return;
 
+    this.eventTimer?.remove(false);
     this.activeEvent = null;
+    this.eventEndsAt = 0;
+    this.lastSecondsShown = -1;
     this.refreshDisplay();
-    this.time.delayedCall(BETWEEN_EVENTS_MS, () => this.startEvent());
+    this.eventTimer = this.time.delayedCall(BETWEEN_EVENTS_MS, () => this.startEvent());
+  }
+
+  private ipChangeCost(): number {
+    return Math.ceil(this.currentGoal * IP_CHANGE_COST_RATE);
+  }
+
+  private changeIp(): void {
+    const cost = this.ipChangeCost();
+    if (this.activeEvent !== 'ipBlock' || this.balance < cost) return;
+
+    this.balance -= cost;
+    this.endEvent();
+    this.showClickFeedback('IP сменён', '#4ade80');
   }
 
   private refreshEventText(): void {
     if (this.activeEvent === 'overselling') {
-      this.eventText.setText(`⚠ Оверселлинг: награда снижена ещё ${this.lastSecondsShown} с`);
+      const effect = this.upgrades === 0 ? 'без мощностей доход 0' : 'награда снижена';
+      this.eventText.setText(`⚠ Оверселлинг: ${effect} ещё ${this.lastSecondsShown} с`);
     } else if (this.activeEvent === 'ipBlock') {
-      this.eventText.setText(`⛔ IP заблокирован: клики без очков ещё ${this.lastSecondsShown} с`);
+      this.eventText.setText(`⛔ IP заблокирован: доход 0 ещё ${this.lastSecondsShown} с`);
     } else {
       this.eventText.setText('✓ Сеть работает нормально. Пора набирать очки!');
     }
@@ -189,29 +224,35 @@ export class GameScene extends Phaser.Scene {
 
   private refreshDisplay(): void {
     this.balanceText.setText(`${this.balance} очков`);
-    this.rewardText.setText(`${this.activeEvent === 'ipBlock' ? 0 : this.rewardPerClick()} очков`);
-    this.goalText.setText(`${this.earned} / ${GOAL}`);
+    this.rewardText.setText(`${this.rewardPerClick()} очков`);
+    this.goalText.setText(`${this.earned} / ${this.currentGoal}`);
     this.upgradeText.setText(`Куплено: ${this.upgrades}\nСледующая мощность: ${this.nextUpgradeCost()} очков`);
     this.buyButtonText.setText(`Купить за ${this.nextUpgradeCost()}`);
     this.buyButton.setFillStyle(this.balance >= this.nextUpgradeCost() ? 0x2563eb : 0x475569);
+    const ipBlocked = this.activeEvent === 'ipBlock';
+    const canChangeIp = ipBlocked && this.balance >= this.ipChangeCost();
+    this.changeIpButton.setVisible(ipBlocked).setFillStyle(canChangeIp ? 0x2563eb : 0x475569);
+    this.changeIpButtonText.setVisible(ipBlocked).setText(`Сменить IP за ${this.ipChangeCost()}`);
+    if (canChangeIp) {
+      this.changeIpButton.setInteractive({ useHandCursor: true });
+    } else {
+      this.changeIpButton.disableInteractive();
+    }
     this.refreshEventText();
   }
 
-  private finishGame(): void {
-    this.finished = true;
-    this.add.rectangle(480, 320, 960, 640, 0x0f172a, 0.92);
-    this.add.text(480, 220, 'Цель достигнута!', {
-      fontFamily: 'system-ui, sans-serif', fontSize: '40px', color: '#ffffff', fontStyle: 'bold',
-    }).setOrigin(0.5);
-    this.add.text(480, 295, `Заработано ${this.earned} очков · Куплено мощностей: ${this.upgrades}`, {
-      fontFamily: 'system-ui, sans-serif', fontSize: '20px', color: '#cbd5e1',
-    }).setOrigin(0.5);
+  private advanceGoal(): void {
+    if (this.earned < this.currentGoal) return;
 
-    const restartButton = this.add.rectangle(480, 395, 250, 64, 0x2563eb);
-    restartButton.setInteractive({ useHandCursor: true });
-    restartButton.on('pointerdown', () => this.scene.restart());
-    this.add.text(480, 395, 'Играть снова', {
-      fontFamily: 'system-ui, sans-serif', fontSize: '21px', color: '#ffffff', fontStyle: 'bold',
+    while (this.earned >= this.currentGoal) {
+      this.currentGoal += GOAL_INCREMENT;
+    }
+    const feedback = this.add.text(480, 625, `Цель достигнута! Новая цель: ${this.currentGoal}`, {
+      fontFamily: 'system-ui, sans-serif', fontSize: '20px', color: '#4ade80', fontStyle: 'bold',
     }).setOrigin(0.5);
+    this.tweens.add({
+      targets: feedback, alpha: 0, duration: 2000,
+      onComplete: () => feedback.destroy(),
+    });
   }
 }
