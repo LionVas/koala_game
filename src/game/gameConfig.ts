@@ -1,0 +1,121 @@
+// Баланс: очки, покупки и переход между фазами.
+export const BALANCE = {
+  initialGoal: 300,
+  goalIncrement: 300,
+  startingReward: 1,
+  rewardPerUpgrade: 1,
+  upgradeCost: 10,
+  upgradeCostGrowth: 1.6,
+  phaseTwoStartEarned: 150,
+  phaseTwoUpgradeMultiplier: 1.5,
+  ipChangeCostRate: 0.1,
+  oversellingRewardDivisor: 2,
+  oversellingMinimumReward: 1,
+};
+
+// Длительности указаны в миллисекундах.
+export const TIMING = {
+  millisecondsPerSecond: 1000,
+  firstEventDelayMs: 12_000,
+  betweenEventsMs: 11_000,
+  phaseTwoBetweenEventsMs: 6_000,
+  oversellingDurationMs: 7_000,
+  ipBlockDurationMs: 5_000,
+  clickFeedbackDurationMs: 650,
+  goalFeedbackDurationMs: 2000,
+};
+
+export const VIEWPORT = {
+  width: 960,
+  height: 640,
+};
+
+// Цвета фигур Phaser — числа, цвета текста и CSS — строки.
+export const COLORS = {
+  background: '#0f172a',
+  overlay: 0x0f172a,
+  panel: 0x1e293b,
+  border: 0x334155,
+  button: 0x2563eb,
+  disabledButton: 0x475569,
+  heading: '#f8fafc',
+  white: '#ffffff',
+  muted: '#94a3b8',
+  text: '#cbd5e1',
+  upgradeText: '#e2e8f0',
+  phaseOne: '#93c5fd',
+  phaseTwo: '#fbbf24',
+  positive: '#4ade80',
+  negative: '#f87171',
+  pageBackground: '#111827',
+};
+
+// Координаты и размеры заданы в пикселях холста, шрифты — в px.
+export const UI = {
+  centerOrigin: 0.5,
+  borderWidth: 1,
+  fontSizes: {
+    title: '32px',
+    subtitle: '16px',
+    phase: '20px',
+    caption: '14px',
+    button: '18px',
+    statValue: '26px',
+    event: '18px',
+    ipButton: '16px',
+    koalaHint: '19px',
+    shopTitle: '18px',
+    shopHint: '16px',
+    upgrade: '19px',
+    buyButton: '19px',
+    pauseTitle: '48px',
+    pauseHint: '20px',
+    resumeButton: '21px',
+    clickFeedback: '25px',
+    goalFeedback: '20px',
+  },
+  title: { x: 40, y: 24 },
+  subtitle: { x: 42, y: 75 },
+  phaseBadge: { x: 453, y: 43, width: 176, height: 40 },
+  phaseHint: { x: 560, y: 76 },
+  restartButton: { x: 828, y: 43, width: 184, height: 40 },
+  pauseButton: { x: 640, y: 43, width: 160, height: 40 },
+  stats: {
+    balanceX: 40,
+    rewardX: 345,
+    goalX: 650,
+    y: 151,
+    width: 270,
+    height: 90,
+    labelOffsetX: 18,
+    labelY: 119,
+    valueOffsetX: 18,
+    valueY: 138,
+  },
+  eventBanner: { x: 480, y: 234, width: 880, height: 54 },
+  eventText: { x: 58, y: 218 },
+  changeIpButton: { x: 798, y: 234, width: 220, height: 40 },
+  koala: { x: 263, y: 429, width: 300, height: 300, hintY: 591 },
+  shop: {
+    x: 704, y: 443, width: 352, height: 324,
+    contentX: 552, titleY: 306, hintY: 352, upgradeY: 399,
+  },
+  buyButton: { x: 704, y: 527, width: 304, height: 64 },
+  pause: {
+    titleY: 240,
+    hintY: 320,
+    resumeY: 410,
+    resumeButtonWidth: 260,
+    resumeButtonHeight: 64,
+    overlayAlpha: 0.9,
+    overlayDepth: 1,
+  },
+  clickFeedback: { x: 263, y: 300, endY: 265, endAlpha: 0 },
+  goalFeedback: { x: 480, y: 625, endAlpha: 0 },
+  page: {
+    padding: 16,
+    minGameHeight: 320,
+    borderRadius: 12,
+    shadow: '0 12px 48px rgb(0 0 0 / 35%)',
+  },
+};

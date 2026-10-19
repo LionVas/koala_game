@@ -1,19 +1,6 @@
 import Phaser from 'phaser';
 import koalaUrl from '../../Koala.png?url';
-
-const INITIAL_GOAL = 300;
-const GOAL_INCREMENT = 300;
-const IP_CHANGE_COST_RATE = 0.1;
-const STARTING_REWARD = 1;
-const UPGRADE_COST = 10;
-const UPGRADE_COST_GROWTH = 1.6;
-const PHASE_TWO_START_EARNED = 150;
-const PHASE_TWO_UPGRADE_MULTIPLIER = 1.5;
-const FIRST_EVENT_DELAY_MS = 12_000;
-const BETWEEN_EVENTS_MS = 11_000;
-const PHASE_TWO_BETWEEN_EVENTS_MS = 6_000;
-const OVERSELLING_DURATION_MS = 7_000;
-const IP_BLOCK_DURATION_MS = 5_000;
+import { BALANCE, COLORS, TIMING, UI, VIEWPORT } from './gameConfig';
 
 type EventType = 'overselling' | 'ipBlock';
 
@@ -21,7 +8,7 @@ export class GameScene extends Phaser.Scene {
   private balance = 0;
   private earned = 0;
   private upgrades = 0;
-  private currentGoal = INITIAL_GOAL;
+  private currentGoal = BALANCE.initialGoal;
   private phase: 1 | 2 = 1;
   private activeEvent: EventType | null = null;
   private nextEvent: EventType = 'overselling';
@@ -53,7 +40,7 @@ export class GameScene extends Phaser.Scene {
     this.balance = 0;
     this.earned = 0;
     this.upgrades = 0;
-    this.currentGoal = INITIAL_GOAL;
+    this.currentGoal = BALANCE.initialGoal;
     this.phase = 1;
     this.activeEvent = null;
     this.nextEvent = 'overselling';
@@ -63,108 +50,113 @@ export class GameScene extends Phaser.Scene {
     this.eventTimer = null;
     this.lastSecondsShown = -1;
 
-    this.add.text(40, 24, 'КОАЛА-ХОСТИНГ', {
-      fontFamily: 'system-ui, sans-serif', fontSize: '32px', color: '#f8fafc', fontStyle: 'bold',
+    this.add.text(UI.title.x, UI.title.y, 'КОАЛА-ХОСТИНГ', {
+      fontFamily: 'system-ui, sans-serif', fontSize: UI.fontSizes.title, color: COLORS.heading, fontStyle: 'bold',
     });
-    this.add.text(42, 75, 'Кликай по коале и покупай мощности.', {
-      fontFamily: 'system-ui, sans-serif', fontSize: '16px', color: '#94a3b8',
+    this.add.text(UI.subtitle.x, UI.subtitle.y, 'Кликай по коале и покупай мощности.', {
+      fontFamily: 'system-ui, sans-serif', fontSize: UI.fontSizes.subtitle, color: COLORS.muted,
     });
-    this.add.rectangle(453, 43, 176, 40, 0x1e293b).setStrokeStyle(1, 0x334155);
-    this.phaseText = this.add.text(453, 43, '', {
-      fontFamily: 'system-ui, sans-serif', fontSize: '20px', color: '#93c5fd', fontStyle: 'bold',
-    }).setOrigin(0.5);
-    this.add.text(560, 76, `От ${PHASE_TWO_START_EARNED} очков начинается вторая фаза: цены ×${PHASE_TWO_UPGRADE_MULTIPLIER}, помехи чаще`, {
-      fontFamily: 'system-ui, sans-serif', fontSize: '14px', color: '#94a3b8',
+    this.add.rectangle(UI.phaseBadge.x, UI.phaseBadge.y, UI.phaseBadge.width, UI.phaseBadge.height, COLORS.panel)
+      .setStrokeStyle(UI.borderWidth, COLORS.border);
+    this.phaseText = this.add.text(UI.phaseBadge.x, UI.phaseBadge.y, '', {
+      fontFamily: 'system-ui, sans-serif', fontSize: UI.fontSizes.phase, color: COLORS.phaseOne, fontStyle: 'bold',
+    }).setOrigin(UI.centerOrigin);
+    this.add.text(UI.phaseHint.x, UI.phaseHint.y, `От ${BALANCE.phaseTwoStartEarned} очков начинается вторая фаза: цены ×${BALANCE.phaseTwoUpgradeMultiplier}, помехи чаще`, {
+      fontFamily: 'system-ui, sans-serif', fontSize: UI.fontSizes.caption, color: COLORS.muted,
     });
 
-    const restartButton = this.add.rectangle(828, 43, 184, 40, 0x475569);
+    const restartButton = this.add.rectangle(UI.restartButton.x, UI.restartButton.y, UI.restartButton.width, UI.restartButton.height, COLORS.disabledButton);
     restartButton.setInteractive({ useHandCursor: true });
     restartButton.on('pointerdown', () => this.scene.restart());
-    this.add.text(828, 43, 'Начать заново', {
-      fontFamily: 'system-ui, sans-serif', fontSize: '18px', color: '#ffffff',
-    }).setOrigin(0.5);
+    this.add.text(UI.restartButton.x, UI.restartButton.y, 'Начать заново', {
+      fontFamily: 'system-ui, sans-serif', fontSize: UI.fontSizes.button, color: COLORS.white,
+    }).setOrigin(UI.centerOrigin);
 
     const valueStyle = {
-      fontFamily: 'system-ui, sans-serif', fontSize: '26px', color: '#ffffff', fontStyle: 'bold',
+      fontFamily: 'system-ui, sans-serif', fontSize: UI.fontSizes.statValue, color: COLORS.white, fontStyle: 'bold',
     };
-    this.addStatCard(40, 'БАЛАНС');
-    this.addStatCard(345, 'ЗА КЛИК');
-    this.addStatCard(650, 'ЦЕЛЬ');
-    this.balanceText = this.add.text(58, 138, '', valueStyle);
-    this.rewardText = this.add.text(363, 138, '', valueStyle);
-    this.goalText = this.add.text(668, 138, '', valueStyle);
+    this.addStatCard(UI.stats.balanceX, 'БАЛАНС');
+    this.addStatCard(UI.stats.rewardX, 'ЗА КЛИК');
+    this.addStatCard(UI.stats.goalX, 'ЦЕЛЬ');
+    this.balanceText = this.add.text(UI.stats.balanceX + UI.stats.valueOffsetX, UI.stats.valueY, '', valueStyle);
+    this.rewardText = this.add.text(UI.stats.rewardX + UI.stats.valueOffsetX, UI.stats.valueY, '', valueStyle);
+    this.goalText = this.add.text(UI.stats.goalX + UI.stats.valueOffsetX, UI.stats.valueY, '', valueStyle);
 
-    this.add.rectangle(480, 234, 880, 54, 0x1e293b).setStrokeStyle(1, 0x334155);
-    this.eventText = this.add.text(58, 218, '', {
-      fontFamily: 'system-ui, sans-serif', fontSize: '18px', color: '#cbd5e1',
+    this.add.rectangle(UI.eventBanner.x, UI.eventBanner.y, UI.eventBanner.width, UI.eventBanner.height, COLORS.panel)
+      .setStrokeStyle(UI.borderWidth, COLORS.border);
+    this.eventText = this.add.text(UI.eventText.x, UI.eventText.y, '', {
+      fontFamily: 'system-ui, sans-serif', fontSize: UI.fontSizes.event, color: COLORS.text,
     });
-    this.changeIpButton = this.add.rectangle(798, 234, 220, 40, 0x2563eb);
+    this.changeIpButton = this.add.rectangle(UI.changeIpButton.x, UI.changeIpButton.y, UI.changeIpButton.width, UI.changeIpButton.height, COLORS.button);
     this.changeIpButton.on('pointerdown', () => this.changeIp());
-    this.changeIpButtonText = this.add.text(798, 234, '', {
-      fontFamily: 'system-ui, sans-serif', fontSize: '16px', color: '#ffffff', fontStyle: 'bold',
-    }).setOrigin(0.5);
+    this.changeIpButtonText = this.add.text(UI.changeIpButton.x, UI.changeIpButton.y, '', {
+      fontFamily: 'system-ui, sans-serif', fontSize: UI.fontSizes.ipButton, color: COLORS.white, fontStyle: 'bold',
+    }).setOrigin(UI.centerOrigin);
 
-    const koala = this.add.image(263, 429, 'koala').setDisplaySize(300, 300);
+    const koala = this.add.image(UI.koala.x, UI.koala.y, 'koala').setDisplaySize(UI.koala.width, UI.koala.height);
     koala.setInteractive({ useHandCursor: true });
     koala.on('pointerdown', () => this.clickKoala());
-    this.add.text(263, 591, 'Нажми на коалу', {
-      fontFamily: 'system-ui, sans-serif', fontSize: '19px', color: '#cbd5e1',
-    }).setOrigin(0.5);
+    this.add.text(UI.koala.x, UI.koala.hintY, 'Нажми на коалу', {
+      fontFamily: 'system-ui, sans-serif', fontSize: UI.fontSizes.koalaHint, color: COLORS.text,
+    }).setOrigin(UI.centerOrigin);
 
-    this.add.rectangle(704, 443, 352, 324, 0x1e293b).setStrokeStyle(1, 0x334155);
-    this.add.text(552, 306, 'ВЫЧИСЛИТЕЛЬНАЯ МОЩНОСТЬ', {
-      fontFamily: 'system-ui, sans-serif', fontSize: '18px', color: '#f8fafc', fontStyle: 'bold',
+    this.add.rectangle(UI.shop.x, UI.shop.y, UI.shop.width, UI.shop.height, COLORS.panel)
+      .setStrokeStyle(UI.borderWidth, COLORS.border);
+    this.add.text(UI.shop.contentX, UI.shop.titleY, 'ВЫЧИСЛИТЕЛЬНАЯ МОЩНОСТЬ', {
+      fontFamily: 'system-ui, sans-serif', fontSize: UI.fontSizes.shopTitle, color: COLORS.heading, fontStyle: 'bold',
     });
-    this.add.text(552, 352, 'Каждая покупка даёт +1 очко за клик.', {
-      fontFamily: 'system-ui, sans-serif', fontSize: '16px', color: '#cbd5e1',
+    this.add.text(UI.shop.contentX, UI.shop.hintY, `Каждая покупка даёт +${BALANCE.rewardPerUpgrade} очко за клик.`, {
+      fontFamily: 'system-ui, sans-serif', fontSize: UI.fontSizes.shopHint, color: COLORS.text,
     });
-    this.upgradeText = this.add.text(552, 399, '', {
-      fontFamily: 'system-ui, sans-serif', fontSize: '19px', color: '#e2e8f0',
+    this.upgradeText = this.add.text(UI.shop.contentX, UI.shop.upgradeY, '', {
+      fontFamily: 'system-ui, sans-serif', fontSize: UI.fontSizes.upgrade, color: COLORS.upgradeText,
     });
-    this.buyButton = this.add.rectangle(704, 527, 304, 64, 0x2563eb);
+    this.buyButton = this.add.rectangle(UI.buyButton.x, UI.buyButton.y, UI.buyButton.width, UI.buyButton.height, COLORS.button);
     this.buyButton.setInteractive({ useHandCursor: true });
     this.buyButton.on('pointerdown', () => this.buyUpgrade());
-    this.buyButtonText = this.add.text(704, 527, '', {
-      fontFamily: 'system-ui, sans-serif', fontSize: '19px', color: '#ffffff', fontStyle: 'bold',
-    }).setOrigin(0.5);
+    this.buyButtonText = this.add.text(UI.buyButton.x, UI.buyButton.y, '', {
+      fontFamily: 'system-ui, sans-serif', fontSize: UI.fontSizes.buyButton, color: COLORS.white, fontStyle: 'bold',
+    }).setOrigin(UI.centerOrigin);
 
     this.createPauseControls();
     this.refreshDisplay();
-    this.eventTimer = this.time.delayedCall(FIRST_EVENT_DELAY_MS, () => this.startEvent());
+    this.eventTimer = this.time.delayedCall(TIMING.firstEventDelayMs, () => this.startEvent());
   }
 
   update(): void {
     if (this.isPaused || !this.activeEvent || !this.eventTimer) return;
 
-    const seconds = Math.max(0, Math.ceil(this.eventTimer.getRemaining() / 1000));
+    const seconds = Math.max(0, Math.ceil(this.eventTimer.getRemaining() / TIMING.millisecondsPerSecond));
     if (seconds === this.lastSecondsShown) return;
     this.lastSecondsShown = seconds;
     this.refreshEventText();
   }
 
   private createPauseControls(): void {
-    const pauseButton = this.add.rectangle(640, 43, 160, 40, 0x2563eb);
+    const pauseButton = this.add.rectangle(UI.pauseButton.x, UI.pauseButton.y, UI.pauseButton.width, UI.pauseButton.height, COLORS.button);
     pauseButton.setInteractive({ useHandCursor: true });
     pauseButton.on('pointerdown', () => this.togglePause());
-    this.add.text(640, 43, 'Пауза (P)', {
-      fontFamily: 'system-ui, sans-serif', fontSize: '18px', color: '#ffffff',
-    }).setOrigin(0.5);
+    this.add.text(UI.pauseButton.x, UI.pauseButton.y, 'Пауза (P)', {
+      fontFamily: 'system-ui, sans-serif', fontSize: UI.fontSizes.button, color: COLORS.white,
+    }).setOrigin(UI.centerOrigin);
 
-    const shade = this.add.rectangle(480, 320, 960, 640, 0x0f172a, 0.9).setInteractive();
-    const title = this.add.text(480, 240, 'ПАУЗА', {
-      fontFamily: 'system-ui, sans-serif', fontSize: '48px', color: '#ffffff', fontStyle: 'bold',
-    }).setOrigin(0.5);
-    const hint = this.add.text(480, 320, 'Клики, покупки и таймеры остановлены', {
-      fontFamily: 'system-ui, sans-serif', fontSize: '20px', color: '#cbd5e1',
-    }).setOrigin(0.5);
-    const resumeButton = this.add.rectangle(480, 410, 260, 64, 0x2563eb);
+    const centerX = VIEWPORT.width * UI.centerOrigin;
+    const centerY = VIEWPORT.height * UI.centerOrigin;
+    const shade = this.add.rectangle(centerX, centerY, VIEWPORT.width, VIEWPORT.height, COLORS.overlay, UI.pause.overlayAlpha).setInteractive();
+    const title = this.add.text(centerX, UI.pause.titleY, 'ПАУЗА', {
+      fontFamily: 'system-ui, sans-serif', fontSize: UI.fontSizes.pauseTitle, color: COLORS.white, fontStyle: 'bold',
+    }).setOrigin(UI.centerOrigin);
+    const hint = this.add.text(centerX, UI.pause.hintY, 'Клики, покупки и таймеры остановлены', {
+      fontFamily: 'system-ui, sans-serif', fontSize: UI.fontSizes.pauseHint, color: COLORS.text,
+    }).setOrigin(UI.centerOrigin);
+    const resumeButton = this.add.rectangle(centerX, UI.pause.resumeY, UI.pause.resumeButtonWidth, UI.pause.resumeButtonHeight, COLORS.button);
     resumeButton.setInteractive({ useHandCursor: true });
     resumeButton.on('pointerdown', () => this.togglePause());
-    const resumeText = this.add.text(480, 410, 'Продолжить (P)', {
-      fontFamily: 'system-ui, sans-serif', fontSize: '21px', color: '#ffffff', fontStyle: 'bold',
-    }).setOrigin(0.5);
+    const resumeText = this.add.text(centerX, UI.pause.resumeY, 'Продолжить (P)', {
+      fontFamily: 'system-ui, sans-serif', fontSize: UI.fontSizes.resumeButton, color: COLORS.white, fontStyle: 'bold',
+    }).setOrigin(UI.centerOrigin);
     this.pauseOverlay = this.add.container(0, 0, [shade, title, hint, resumeButton, resumeText])
-      .setDepth(1).setVisible(false);
+      .setDepth(UI.pause.overlayDepth).setVisible(false);
     this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.P)
       .on('down', () => this.togglePause());
   }
@@ -177,22 +169,23 @@ export class GameScene extends Phaser.Scene {
   }
 
   private addStatCard(x: number, label: string): void {
-    this.add.rectangle(x + 135, 151, 270, 90, 0x1e293b).setStrokeStyle(1, 0x334155);
-    this.add.text(x + 18, 119, label, {
-      fontFamily: 'system-ui, sans-serif', fontSize: '14px', color: '#94a3b8', fontStyle: 'bold',
+    this.add.rectangle(x + UI.stats.width * UI.centerOrigin, UI.stats.y, UI.stats.width, UI.stats.height, COLORS.panel)
+      .setStrokeStyle(UI.borderWidth, COLORS.border);
+    this.add.text(x + UI.stats.labelOffsetX, UI.stats.labelY, label, {
+      fontFamily: 'system-ui, sans-serif', fontSize: UI.fontSizes.caption, color: COLORS.muted, fontStyle: 'bold',
     });
   }
 
   private nextUpgradeCost(): number {
-    const phaseMultiplier = this.phase === 2 ? PHASE_TWO_UPGRADE_MULTIPLIER : 1;
-    return Math.ceil(UPGRADE_COST * UPGRADE_COST_GROWTH ** this.upgrades * phaseMultiplier);
+    const phaseMultiplier = this.phase === 2 ? BALANCE.phaseTwoUpgradeMultiplier : 1;
+    return Math.ceil(BALANCE.upgradeCost * BALANCE.upgradeCostGrowth ** this.upgrades * phaseMultiplier);
   }
 
   private rewardPerClick(): number {
     if (this.activeEvent === 'ipBlock') return 0;
-    const normalReward = STARTING_REWARD + this.upgrades;
+    const normalReward = BALANCE.startingReward + this.upgrades * BALANCE.rewardPerUpgrade;
     if (this.activeEvent !== 'overselling') return normalReward;
-    return this.upgrades === 0 ? 0 : Math.max(1, Math.floor(normalReward / 2));
+    return this.upgrades === 0 ? 0 : Math.max(BALANCE.oversellingMinimumReward, Math.floor(normalReward / BALANCE.oversellingRewardDivisor));
   }
 
   private clickKoala(): void {
@@ -201,24 +194,24 @@ export class GameScene extends Phaser.Scene {
     const reward = this.rewardPerClick();
     if (reward === 0) {
       const message = this.activeEvent === 'ipBlock' ? 'IP заблокирован' : 'Оверселлинг: доход 0';
-      this.showClickFeedback(message, '#f87171');
+      this.showClickFeedback(message, COLORS.negative);
       return;
     }
 
     this.balance += reward;
     this.earned += reward;
     this.advancePhase();
-    this.showClickFeedback(`+${reward}`, '#4ade80');
+    this.showClickFeedback(`+${reward}`, COLORS.positive);
     this.advanceGoal();
     this.refreshDisplay();
   }
 
   private showClickFeedback(message: string, color: string): void {
-    const feedback = this.add.text(263, 300, message, {
-      fontFamily: 'system-ui, sans-serif', fontSize: '25px', color, fontStyle: 'bold',
-    }).setOrigin(0.5);
+    const feedback = this.add.text(UI.clickFeedback.x, UI.clickFeedback.y, message, {
+      fontFamily: 'system-ui, sans-serif', fontSize: UI.fontSizes.clickFeedback, color, fontStyle: 'bold',
+    }).setOrigin(UI.centerOrigin);
     this.tweens.add({
-      targets: feedback, y: 265, alpha: 0, duration: 650,
+      targets: feedback, y: UI.clickFeedback.endY, alpha: UI.clickFeedback.endAlpha, duration: TIMING.clickFeedbackDurationMs,
       onComplete: () => feedback.destroy(),
     });
   }
@@ -237,8 +230,8 @@ export class GameScene extends Phaser.Scene {
   private startEvent(): void {
     this.activeEvent = this.nextEvent;
     this.nextEvent = this.nextEvent === 'overselling' ? 'ipBlock' : 'overselling';
-    const duration = this.activeEvent === 'overselling' ? OVERSELLING_DURATION_MS : IP_BLOCK_DURATION_MS;
-    this.lastSecondsShown = Math.ceil(duration / 1000);
+    const duration = this.activeEvent === 'overselling' ? TIMING.oversellingDurationMs : TIMING.ipBlockDurationMs;
+    this.lastSecondsShown = Math.ceil(duration / TIMING.millisecondsPerSecond);
     this.refreshDisplay();
     this.eventTimer = this.time.delayedCall(duration, () => this.endEvent());
   }
@@ -250,12 +243,12 @@ export class GameScene extends Phaser.Scene {
     this.activeEvent = null;
     this.lastSecondsShown = -1;
     this.refreshDisplay();
-    const delay = this.phase === 2 ? PHASE_TWO_BETWEEN_EVENTS_MS : BETWEEN_EVENTS_MS;
+    const delay = this.phase === 2 ? TIMING.phaseTwoBetweenEventsMs : TIMING.betweenEventsMs;
     this.eventTimer = this.time.delayedCall(delay, () => this.startEvent());
   }
 
   private ipChangeCost(): number {
-    return Math.ceil(this.currentGoal * IP_CHANGE_COST_RATE);
+    return Math.ceil(this.currentGoal * BALANCE.ipChangeCostRate);
   }
 
   private changeIp(): void {
@@ -266,7 +259,7 @@ export class GameScene extends Phaser.Scene {
 
     this.balance -= cost;
     this.endEvent();
-    this.showClickFeedback('IP сменён', '#4ade80');
+    this.showClickFeedback('IP сменён', COLORS.positive);
   }
 
   private refreshEventText(): void {
@@ -281,16 +274,16 @@ export class GameScene extends Phaser.Scene {
   }
 
   private refreshDisplay(): void {
-    this.phaseText.setText(`ФАЗА ${this.phase}`).setColor(this.phase === 2 ? '#fbbf24' : '#93c5fd');
+    this.phaseText.setText(`ФАЗА ${this.phase}`).setColor(this.phase === 2 ? COLORS.phaseTwo : COLORS.phaseOne);
     this.balanceText.setText(`${this.balance} очков`);
     this.rewardText.setText(`${this.rewardPerClick()} очков`);
     this.goalText.setText(`${this.earned} / ${this.currentGoal}`);
     this.upgradeText.setText(`Куплено: ${this.upgrades}\nСледующая мощность: ${this.nextUpgradeCost()} очков`);
     this.buyButtonText.setText(`Купить за ${this.nextUpgradeCost()}`);
-    this.buyButton.setFillStyle(this.balance >= this.nextUpgradeCost() ? 0x2563eb : 0x475569);
+    this.buyButton.setFillStyle(this.balance >= this.nextUpgradeCost() ? COLORS.button : COLORS.disabledButton);
     const ipBlocked = this.activeEvent === 'ipBlock';
     const canChangeIp = ipBlocked && this.balance >= this.ipChangeCost();
-    this.changeIpButton.setVisible(ipBlocked).setFillStyle(canChangeIp ? 0x2563eb : 0x475569);
+    this.changeIpButton.setVisible(ipBlocked).setFillStyle(canChangeIp ? COLORS.button : COLORS.disabledButton);
     this.changeIpButtonText.setVisible(ipBlocked).setText(`Сменить IP за ${this.ipChangeCost()}`);
     if (canChangeIp) {
       this.changeIpButton.setInteractive({ useHandCursor: true });
@@ -301,11 +294,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   private advancePhase(): void {
-    if (this.phase === 2 || this.earned < PHASE_TWO_START_EARNED) return;
+    if (this.phase === 2 || this.earned < BALANCE.phaseTwoStartEarned) return;
 
     this.phase = 2;
     if (!this.activeEvent && this.eventTimer) {
-      const delay = Math.min(this.eventTimer.getRemaining(), PHASE_TWO_BETWEEN_EVENTS_MS);
+      const delay = Math.min(this.eventTimer.getRemaining(), TIMING.phaseTwoBetweenEventsMs);
       this.eventTimer.remove(false);
       this.eventTimer = this.time.delayedCall(delay, () => this.startEvent());
     }
@@ -315,13 +308,13 @@ export class GameScene extends Phaser.Scene {
     if (this.earned < this.currentGoal) return;
 
     while (this.earned >= this.currentGoal) {
-      this.currentGoal += GOAL_INCREMENT;
+      this.currentGoal += BALANCE.goalIncrement;
     }
-    const feedback = this.add.text(480, 625, `Цель достигнута! Новая цель: ${this.currentGoal}`, {
-      fontFamily: 'system-ui, sans-serif', fontSize: '20px', color: '#4ade80', fontStyle: 'bold',
-    }).setOrigin(0.5);
+    const feedback = this.add.text(UI.goalFeedback.x, UI.goalFeedback.y, `Цель достигнута! Новая цель: ${this.currentGoal}`, {
+      fontFamily: 'system-ui, sans-serif', fontSize: UI.fontSizes.goalFeedback, color: COLORS.positive, fontStyle: 'bold',
+    }).setOrigin(UI.centerOrigin);
     this.tweens.add({
-      targets: feedback, alpha: 0, duration: 2000,
+      targets: feedback, alpha: UI.goalFeedback.endAlpha, duration: TIMING.goalFeedbackDurationMs,
       onComplete: () => feedback.destroy(),
     });
   }
