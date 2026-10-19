@@ -57,7 +57,7 @@ export class GameScene extends Phaser.Scene {
     this.eventTimer = null;
     this.lastSecondsShown = -1;
 
-    this.add.text(40, 24, 'КОАЛА-КЛИКЕР', {
+    this.add.text(40, 24, 'КОАЛА-ХОСТИНГ', {
       fontFamily: 'system-ui, sans-serif', fontSize: '32px', color: '#f8fafc', fontStyle: 'bold',
     });
     this.add.text(42, 68, 'Кликай по коале, покупай мощности и достигай новых целей.', {
