@@ -21,7 +21,7 @@ export class GameScene extends Phaser.Scene {
   private currentGoal = INITIAL_GOAL;
   private activeEvent: EventType | null = null;
   private nextEvent: EventType = 'overselling';
-  private eventEndsAt = 0;
+  private isPaused = false;
   private lastSecondsShown = -1;
   private eventTimer: Phaser.Time.TimerEvent | null = null;
 
@@ -34,6 +34,7 @@ export class GameScene extends Phaser.Scene {
   private buyButtonText!: Phaser.GameObjects.Text;
   private changeIpButton!: Phaser.GameObjects.Rectangle;
   private changeIpButtonText!: Phaser.GameObjects.Text;
+  private pauseOverlay!: Phaser.GameObjects.Container;
 
   constructor() {
     super('GameScene');
@@ -50,7 +51,9 @@ export class GameScene extends Phaser.Scene {
     this.currentGoal = INITIAL_GOAL;
     this.activeEvent = null;
     this.nextEvent = 'overselling';
-    this.eventEndsAt = 0;
+    this.isPaused = false;
+    this.time.paused = false;
+    this.tweens.paused = false;
     this.eventTimer = null;
     this.lastSecondsShown = -1;
 
@@ -112,17 +115,52 @@ export class GameScene extends Phaser.Scene {
       fontFamily: 'system-ui, sans-serif', fontSize: '19px', color: '#ffffff', fontStyle: 'bold',
     }).setOrigin(0.5);
 
+    this.createPauseControls();
     this.refreshDisplay();
     this.eventTimer = this.time.delayedCall(FIRST_EVENT_DELAY_MS, () => this.startEvent());
   }
 
   update(): void {
-    if (!this.activeEvent) return;
+    if (this.isPaused || !this.activeEvent || !this.eventTimer) return;
 
-    const seconds = Math.max(0, Math.ceil((this.eventEndsAt - this.time.now) / 1000));
+    const seconds = Math.max(0, Math.ceil(this.eventTimer.getRemaining() / 1000));
     if (seconds === this.lastSecondsShown) return;
     this.lastSecondsShown = seconds;
     this.refreshEventText();
+  }
+
+  private createPauseControls(): void {
+    const pauseButton = this.add.rectangle(640, 43, 160, 40, 0x2563eb);
+    pauseButton.setInteractive({ useHandCursor: true });
+    pauseButton.on('pointerdown', () => this.togglePause());
+    this.add.text(640, 43, 'Пауза (P)', {
+      fontFamily: 'system-ui, sans-serif', fontSize: '18px', color: '#ffffff',
+    }).setOrigin(0.5);
+
+    const shade = this.add.rectangle(480, 320, 960, 640, 0x0f172a, 0.9).setInteractive();
+    const title = this.add.text(480, 240, 'ПАУЗА', {
+      fontFamily: 'system-ui, sans-serif', fontSize: '48px', color: '#ffffff', fontStyle: 'bold',
+    }).setOrigin(0.5);
+    const hint = this.add.text(480, 320, 'Клики, покупки и таймеры остановлены', {
+      fontFamily: 'system-ui, sans-serif', fontSize: '20px', color: '#cbd5e1',
+    }).setOrigin(0.5);
+    const resumeButton = this.add.rectangle(480, 410, 260, 64, 0x2563eb);
+    resumeButton.setInteractive({ useHandCursor: true });
+    resumeButton.on('pointerdown', () => this.togglePause());
+    const resumeText = this.add.text(480, 410, 'Продолжить (P)', {
+      fontFamily: 'system-ui, sans-serif', fontSize: '21px', color: '#ffffff', fontStyle: 'bold',
+    }).setOrigin(0.5);
+    this.pauseOverlay = this.add.container(0, 0, [shade, title, hint, resumeButton, resumeText])
+      .setDepth(1).setVisible(false);
+    this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.P)
+      .on('down', () => this.togglePause());
+  }
+
+  private togglePause(): void {
+    this.isPaused = !this.isPaused;
+    this.time.paused = this.isPaused;
+    this.tweens.paused = this.isPaused;
+    this.pauseOverlay.setVisible(this.isPaused);
   }
 
   private addStatCard(x: number, label: string): void {
@@ -144,6 +182,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private clickKoala(): void {
+    if (this.isPaused) return;
+
     const reward = this.rewardPerClick();
     if (reward === 0) {
       const message = this.activeEvent === 'ipBlock' ? 'IP заблокирован' : 'Оверселлинг: доход 0';
@@ -169,6 +209,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private buyUpgrade(): void {
+    if (this.isPaused) return;
+
     const cost = this.nextUpgradeCost();
     if (this.balance < cost) return;
 
@@ -181,7 +223,6 @@ export class GameScene extends Phaser.Scene {
     this.activeEvent = this.nextEvent;
     this.nextEvent = this.nextEvent === 'overselling' ? 'ipBlock' : 'overselling';
     const duration = this.activeEvent === 'overselling' ? OVERSELLING_DURATION_MS : IP_BLOCK_DURATION_MS;
-    this.eventEndsAt = this.time.now + duration;
     this.lastSecondsShown = Math.ceil(duration / 1000);
     this.refreshDisplay();
     this.eventTimer = this.time.delayedCall(duration, () => this.endEvent());
@@ -192,7 +233,6 @@ export class GameScene extends Phaser.Scene {
 
     this.eventTimer?.remove(false);
     this.activeEvent = null;
-    this.eventEndsAt = 0;
     this.lastSecondsShown = -1;
     this.refreshDisplay();
     this.eventTimer = this.time.delayedCall(BETWEEN_EVENTS_MS, () => this.startEvent());
@@ -203,6 +243,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private changeIp(): void {
+    if (this.isPaused) return;
+
     const cost = this.ipChangeCost();
     if (this.activeEvent !== 'ipBlock' || this.balance < cost) return;
 
