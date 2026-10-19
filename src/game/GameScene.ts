@@ -73,7 +73,7 @@ export class GameScene extends Phaser.Scene {
     this.phaseText = this.add.text(453, 43, '', {
       fontFamily: 'system-ui, sans-serif', fontSize: '20px', color: '#93c5fd', fontStyle: 'bold',
     }).setOrigin(0.5);
-    this.add.text(560, 76, `С ${PHASE_TWO_START_EARNED} очков: цены ×${PHASE_TWO_UPGRADE_MULTIPLIER}, помехи чаще`, {
+    this.add.text(560, 76, `От ${PHASE_TWO_START_EARNED} очков начинается вторая фаза: цены ×${PHASE_TWO_UPGRADE_MULTIPLIER}, помехи чаще`, {
       fontFamily: 'system-ui, sans-serif', fontSize: '14px', color: '#94a3b8',
     });
 
