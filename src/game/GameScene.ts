@@ -7,7 +7,7 @@ const IP_CHANGE_COST_RATE = 0.1;
 const STARTING_REWARD = 1;
 const UPGRADE_COST = 10;
 const UPGRADE_COST_GROWTH = 1.6;
-const PHASE_TWO_START_SECONDS = 15;
+const PHASE_TWO_START_EARNED = 150;
 const PHASE_TWO_UPGRADE_MULTIPLIER = 1.5;
 const FIRST_EVENT_DELAY_MS = 12_000;
 const BETWEEN_EVENTS_MS = 11_000;
@@ -22,7 +22,6 @@ export class GameScene extends Phaser.Scene {
   private earned = 0;
   private upgrades = 0;
   private currentGoal = INITIAL_GOAL;
-  private elapsedSeconds = 0;
   private phase: 1 | 2 = 1;
   private activeEvent: EventType | null = null;
   private nextEvent: EventType = 'overselling';
@@ -33,7 +32,6 @@ export class GameScene extends Phaser.Scene {
   private balanceText!: Phaser.GameObjects.Text;
   private rewardText!: Phaser.GameObjects.Text;
   private goalText!: Phaser.GameObjects.Text;
-  private timerText!: Phaser.GameObjects.Text;
   private phaseText!: Phaser.GameObjects.Text;
   private eventText!: Phaser.GameObjects.Text;
   private upgradeText!: Phaser.GameObjects.Text;
@@ -56,7 +54,6 @@ export class GameScene extends Phaser.Scene {
     this.earned = 0;
     this.upgrades = 0;
     this.currentGoal = INITIAL_GOAL;
-    this.elapsedSeconds = 0;
     this.phase = 1;
     this.activeEvent = null;
     this.nextEvent = 'overselling';
@@ -72,14 +69,11 @@ export class GameScene extends Phaser.Scene {
     this.add.text(42, 75, 'Кликай по коале и покупай мощности.', {
       fontFamily: 'system-ui, sans-serif', fontSize: '16px', color: '#94a3b8',
     });
-    this.add.rectangle(453, 58, 176, 76, 0x1e293b).setStrokeStyle(1, 0x334155);
-    this.timerText = this.add.text(377, 27, '', {
-      fontFamily: 'system-ui, sans-serif', fontSize: '18px', color: '#f8fafc', fontStyle: 'bold',
-    });
-    this.phaseText = this.add.text(377, 57, '', {
+    this.add.rectangle(453, 43, 176, 40, 0x1e293b).setStrokeStyle(1, 0x334155);
+    this.phaseText = this.add.text(453, 43, '', {
       fontFamily: 'system-ui, sans-serif', fontSize: '20px', color: '#93c5fd', fontStyle: 'bold',
-    });
-    this.add.text(560, 76, `С ${PHASE_TWO_START_SECONDS} секунд цены растут ×${PHASE_TWO_UPGRADE_MULTIPLIER}, помехи появляются  чаще`, {
+    }).setOrigin(0.5);
+    this.add.text(560, 76, `С ${PHASE_TWO_START_EARNED} очков: цены ×${PHASE_TWO_UPGRADE_MULTIPLIER}, помехи чаще`, {
       fontFamily: 'system-ui, sans-serif', fontSize: '14px', color: '#94a3b8',
     });
 
@@ -137,15 +131,6 @@ export class GameScene extends Phaser.Scene {
     this.createPauseControls();
     this.refreshDisplay();
     this.eventTimer = this.time.delayedCall(FIRST_EVENT_DELAY_MS, () => this.startEvent());
-    this.time.addEvent({
-      delay: 1000,
-      loop: true,
-      callback: () => {
-        this.elapsedSeconds += 1;
-        if (this.elapsedSeconds >= PHASE_TWO_START_SECONDS) this.phase = 2;
-        this.refreshDisplay();
-      },
-    });
   }
 
   update(): void {
@@ -222,6 +207,7 @@ export class GameScene extends Phaser.Scene {
 
     this.balance += reward;
     this.earned += reward;
+    this.advancePhase();
     this.showClickFeedback(`+${reward}`, '#4ade80');
     this.advanceGoal();
     this.refreshDisplay();
@@ -295,9 +281,6 @@ export class GameScene extends Phaser.Scene {
   }
 
   private refreshDisplay(): void {
-    const minutes = Math.floor(this.elapsedSeconds / 60).toString().padStart(2, '0');
-    const seconds = (this.elapsedSeconds % 60).toString().padStart(2, '0');
-    this.timerText.setText(`Время: ${minutes}:${seconds}`);
     this.phaseText.setText(`ФАЗА ${this.phase}`).setColor(this.phase === 2 ? '#fbbf24' : '#93c5fd');
     this.balanceText.setText(`${this.balance} очков`);
     this.rewardText.setText(`${this.rewardPerClick()} очков`);
@@ -315,6 +298,17 @@ export class GameScene extends Phaser.Scene {
       this.changeIpButton.disableInteractive();
     }
     this.refreshEventText();
+  }
+
+  private advancePhase(): void {
+    if (this.phase === 2 || this.earned < PHASE_TWO_START_EARNED) return;
+
+    this.phase = 2;
+    if (!this.activeEvent && this.eventTimer) {
+      const delay = Math.min(this.eventTimer.getRemaining(), PHASE_TWO_BETWEEN_EVENTS_MS);
+      this.eventTimer.remove(false);
+      this.eventTimer = this.time.delayedCall(delay, () => this.startEvent());
+    }
   }
 
   private advanceGoal(): void {
